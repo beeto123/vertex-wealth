@@ -7,16 +7,10 @@ import { eq } from 'drizzle-orm';
 export async function GET() {
   try {
     const token = await getAuthCookie();
-
-    if (!token) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    }
+    if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
     const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
     // Get balance directly from balances table (single source of truth)
     const balance = await db.query.balances.findFirst({
@@ -24,7 +18,6 @@ export async function GET() {
     });
 
     if (!balance) {
-      // Return zeros if no balance record exists yet
       return NextResponse.json({
         currentBalance: "0.00",
         totalDeposited: "0.00",
