@@ -12,14 +12,10 @@ interface User {
 
 interface Transaction {
   id?: string;
-  type?: 'deposit' | 'withdrawal';
-  amount: string | number;
+  amount: string;
   status: string;
+  type: string;
   createdAt?: string;
-  requestedAt?: string;
-  walletAddress?: string;
-  rejectionReason?: string;
-  adminMessage?: string;
 }
 
 export default function DashboardPage() {
@@ -30,47 +26,45 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch('/api/auth/me');
-        if (!res.ok) return router.push('/login');
-        
-        const data = await res.json();
-        setUser(data.user);
+        // Check auth
+        const authRes = await fetch('/api/auth/me');
+        if (!authRes.ok) {
+          router.push('/login');
+          return;
+        }
+        const authData = await authRes.json();
+        setUser(authData.user);
 
-        // Get deposits directly and calculate balance from confirmed ones
-        const depositsRes = await fetch('/api/transactions');
-        if (depositsRes.ok) {
-          const txData = await depositsRes.json();
-          const transactions = txData.transactions || [];
-          setRecentTransactions(transactions.slice(0, 6));
-          
-          // Calculate balance from confirmed deposits ONLY
-          const confirmedDeposits = transactions.filter(
-            (t: Transaction) => t.type === 'deposit' && t.status === 'confirmed'
-          );
-          const totalConfirmed = confirmedDeposits.reduce(
-            (sum: number, t: Transaction) => sum + parseFloat(t.amount as string), 
-            0
-          );
-          
+        // Get balance from API
+        const balanceRes = await fetch('/api/balance');
+        if (balanceRes.ok) {
+          const balanceData = await balanceRes.json();
           setBalance({
-            currentBalance: totalConfirmed.toString(),
-            totalDeposited: totalConfirmed.toString()
+            currentBalance: balanceData.currentBalance || '0',
+            totalDeposited: balanceData.totalDeposited || '0'
           });
         }
+
+        // Get recent transactions
+        const txRes = await fetch('/api/transactions');
+        if (txRes.ok) {
+          const txData = await txRes.json();
+          setRecentTransactions((txData.transactions || []).slice(0, 5));
+        }
       } catch (error) {
-        router.push('/login');
+        console.error('Error:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    checkAuth();
+    fetchData();
   }, [router]);
 
   if (loading) {
-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-900">Loading...</div>;
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>;
   }
 
   if (!user) return null;
@@ -92,12 +86,8 @@ export default function DashboardPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="bg-white p-5 sm:p-6 rounded-2xl shadow mb-8">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900">
-            Welcome back, {user.fullName}!
-          </h2>
-          <p className="text-gray-600 mt-1 text-sm sm:text-base">
-            Your daily interest rate: <span className="font-medium">9-13%</span> (set by admin)
-          </p>
+          <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900">Welcome back, {user.fullName}!</h2>
+          <p className="text-gray-600 mt-1">Your daily interest rate: 9-13% (set by admin)</p>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -126,41 +116,28 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow p-5 sm:p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-semibold text-gray-900">Recent Activity</h3>
-            <a href="/history" className="text-green-600 hover:underline text-sm">View All →</a>
-          </div>
-
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h3>
           {recentTransactions.length === 0 ? (
-            <p className="text-gray-600 py-12 text-center">No transactions yet</p>
+            <p className="text-gray-600 py-8 text-center">No transactions yet</p>
           ) : (
-            <div className="space-y-5">
-              {recentTransactions.map((t, index) => {
-                const reason = t.rejectionReason || t.adminMessage || '';
-                const isWithdrawal = t.type === 'withdrawal' || !!t.walletAddress;
-                const key = t.id || `tx-${index}`;
-
-                return (
-                  <div key={key} className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b pb-5 last:border-0 gap-2">
-                    <div>
-                      <p className="font-medium text-gray-900">{isWithdrawal ? 'Withdrawal' : 'Deposit'}</p>
-                      <p className="text-sm text-gray-600">
-                        {t.createdAt || t.requestedAt ? new Date(t.createdAt || t.requestedAt!).toLocaleDateString() : '—'}
-                      </p>
-                    </div>
-                    <div className="text-right sm:text-right">
-                      <p className="font-semibold text-lg text-gray-900">${t.amount}</p>
-                      <span className={`inline-block px-4 py-1 rounded-full text-xs font-medium mt-1 ${
-                        t.status === 'approved' || t.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                        t.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {t.status}
-                      </span>
-                      {reason && <p className="text-red-600 text-sm mt-2">Rejected: {reason}</p>}
-                    </div>
+            <div className="space-y-4">
+              {recentTransactions.map((tx, i) => (
+                <div key={i} className="flex justify-between items-center border-b pb-3">
+                  <div>
+                    <p className="font-medium capitalize">{tx.type}</p>
+                    <p className="text-sm text-gray-500">{tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : '—'}</p>
                   </div>
-                );
-              })}
+                  <div className="text-right">
+                    <p className="font-semibold">${tx.amount}</p>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      tx.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                      tx.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {tx.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
