@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       where: eq(deposits.id, depositId),
     });
 
-    if (!deposit) {
+    if (!deposit || !deposit.userId) {
       return NextResponse.json({ error: 'Deposit not found' }, { status: 404 });
     }
 
@@ -35,12 +35,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Deposit already processed' }, { status: 400 });
     }
 
-    // Update deposit status
+    // Update deposit
     await db.update(deposits)
       .set({ status: 'confirmed', confirmedAt: new Date() })
       .where(eq(deposits.id, depositId));
 
-    // Update user balance
+    // Update balance
     const balance = await db.query.balances.findFirst({
       where: eq(balances.userId, deposit.userId),
     });
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
         .where(eq(balances.userId, deposit.userId));
     }
 
-    // === SEND EMAIL ===
+    // Send email
     const user = await db.query.users.findFirst({
       where: eq(users.id, deposit.userId),
     });

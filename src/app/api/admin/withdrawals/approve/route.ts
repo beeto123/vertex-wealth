@@ -22,11 +22,15 @@ export async function POST(request: NextRequest) {
       where: eq(withdrawals.id, withdrawalId),
     });
 
-    if (!withdrawal || withdrawal.status !== 'pending') {
+    if (!withdrawal || !withdrawal.userId) {
       return NextResponse.json({ error: 'Invalid withdrawal' }, { status: 400 });
     }
 
-    // Deduct from balance
+    if (withdrawal.status !== 'pending') {
+      return NextResponse.json({ error: 'Invalid withdrawal' }, { status: 400 });
+    }
+
+    // Update balance
     const balance = await db.query.balances.findFirst({
       where: eq(balances.userId, withdrawal.userId),
     });
@@ -47,7 +51,7 @@ export async function POST(request: NextRequest) {
       .set({ status: 'approved', processedAt: new Date() })
       .where(eq(withdrawals.id, withdrawalId));
 
-    // === SEND EMAIL ===
+    // Send email
     const user = await db.query.users.findFirst({
       where: eq(users.id, withdrawal.userId),
     });
