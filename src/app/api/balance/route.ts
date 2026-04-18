@@ -1,3 +1,7 @@
+// FORCE REDEPLOY - v2.1
+import { NextResponse } from 'next/server';
+// ... rest of the code
+
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { balances } from '@/db/schema';
