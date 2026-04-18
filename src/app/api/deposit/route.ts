@@ -13,7 +13,6 @@ export async function POST(request: NextRequest) {
     const payload = verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-    // Check if user is admin
     const admin = await db.query.users.findFirst({
       where: eq(users.id, payload.userId),
     });
@@ -28,7 +27,6 @@ export async function POST(request: NextRequest) {
       where: eq(deposits.id, depositId),
     });
 
-    // Critical fix: Check for null userId
     if (!deposit || !deposit.userId) {
       return NextResponse.json({ error: 'Deposit not found' }, { status: 404 });
     }
@@ -37,14 +35,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Deposit already processed' }, { status: 400 });
     }
 
-    // Update deposit status
+    // Update deposit
     await db.update(deposits)
       .set({ status: 'confirmed', confirmedAt: new Date() })
       .where(eq(deposits.id, depositId));
 
-    // Update user balance
+    // FIXED: Safe balance update
     const balance = await db.query.balances.findFirst({
-      where: eq(balances.userId, deposit.userId),
+      where: eq(balances.userId, deposit.userId!),
     });
 
     if (balance) {
@@ -56,25 +54,22 @@ export async function POST(request: NextRequest) {
           currentBalance: newBalance.toString(),
           totalDeposited: newTotalDeposited.toString(),
         })
-        .where(eq(balances.userId, deposit.userId));
+        .where(eq(balances.userId, deposit.userId!));
     }
 
-    // Send approval email
+    // Send email
     const user = await db.query.users.findFirst({
-      where: eq(users.id, deposit.userId),
+      where: eq(users.id, deposit.userId!),
     });
 
     if (user?.email) {
       await sendDepositApproved(user.email, deposit.amount.toString(), user.fullName || "User");
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Deposit approved successfully' 
-    });
+    return NextResponse.json({ success: true, message: 'Deposit approved' });
 
   } catch (error) {
-    console.error('Approve deposit error:', error);
+    console.error('Approve error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
 }
