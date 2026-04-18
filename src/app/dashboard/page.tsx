@@ -10,13 +10,6 @@ interface User {
   isAdmin: boolean;
 }
 
-interface Balance {
-  currentBalance: string;
-  totalDeposited: string;
-  totalWithdrawn: string;
-  totalInterestEarned: string;
-}
-
 interface Transaction {
   id?: string;
   type?: 'deposit' | 'withdrawal';
@@ -32,7 +25,7 @@ interface Transaction {
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [balance, setBalance] = useState<Balance | null>(null);
+  const [balance, setBalance] = useState({ currentBalance: '0', totalDeposited: '0' });
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,12 +37,27 @@ export default function DashboardPage() {
         
         const data = await res.json();
         setUser(data.user);
-        setBalance(data.balance);
 
-        const txRes = await fetch('/api/transactions');
-        if (txRes.ok) {
-          const txData = await txRes.json();
-          setRecentTransactions(txData.transactions?.slice(0, 6) || []);
+        // Get deposits directly and calculate balance from confirmed ones
+        const depositsRes = await fetch('/api/transactions');
+        if (depositsRes.ok) {
+          const txData = await depositsRes.json();
+          const transactions = txData.transactions || [];
+          setRecentTransactions(transactions.slice(0, 6));
+          
+          // Calculate balance from confirmed deposits ONLY
+          const confirmedDeposits = transactions.filter(
+            (t: Transaction) => t.type === 'deposit' && t.status === 'confirmed'
+          );
+          const totalConfirmed = confirmedDeposits.reduce(
+            (sum: number, t: Transaction) => sum + parseFloat(t.amount as string), 
+            0
+          );
+          
+          setBalance({
+            currentBalance: totalConfirmed.toString(),
+            totalDeposited: totalConfirmed.toString()
+          });
         }
       } catch (error) {
         router.push('/login');
@@ -83,7 +91,6 @@ export default function DashboardPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Welcome - Top */}
         <div className="bg-white p-5 sm:p-6 rounded-2xl shadow mb-8">
           <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900">
             Welcome back, {user.fullName}!
@@ -93,34 +100,31 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Balance Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white p-5 sm:p-6 rounded-xl shadow">
             <p className="text-xs sm:text-sm text-gray-700">Current Balance</p>
-            <p className="text-2xl sm:text-3xl font-bold text-green-600 mt-1">${balance?.currentBalance || '0.00'}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-green-600 mt-1">${balance.currentBalance}</p>
           </div>
           <div className="bg-white p-5 sm:p-6 rounded-xl shadow">
             <p className="text-xs sm:text-sm text-gray-700">Total Deposited</p>
-            <p className="text-2xl sm:text-3xl font-bold text-blue-600 mt-1">${balance?.totalDeposited || '0.00'}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-blue-600 mt-1">${balance.totalDeposited}</p>
           </div>
           <div className="bg-white p-5 sm:p-6 rounded-xl shadow">
             <p className="text-xs sm:text-sm text-gray-700">Total Withdrawn</p>
-            <p className="text-2xl sm:text-3xl font-bold text-orange-600 mt-1">${balance?.totalWithdrawn || '0.00'}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-orange-600 mt-1">$0.00</p>
           </div>
           <div className="bg-white p-5 sm:p-6 rounded-xl shadow">
             <p className="text-xs sm:text-sm text-gray-700">Interest Earned</p>
-            <p className="text-2xl sm:text-3xl font-bold text-purple-600 mt-1">${balance?.totalInterestEarned || '0.00'}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-purple-600 mt-1">$0.00</p>
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
           <a href="/deposit" className="bg-green-600 text-white py-4 rounded-xl text-center font-medium hover:bg-green-700">Make Deposit</a>
           <a href="/withdraw" className="bg-blue-600 text-white py-4 rounded-xl text-center font-medium hover:bg-blue-700">Request Withdrawal</a>
           <a href="/history" className="bg-gray-700 text-white py-4 rounded-xl text-center font-medium hover:bg-gray-800">Full History</a>
         </div>
 
-        {/* Recent Activity */}
         <div className="bg-white rounded-2xl shadow p-5 sm:p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-xl font-semibold text-gray-900">Recent Activity</h3>
@@ -132,7 +136,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-5">
               {recentTransactions.map((t, index) => {
-                const reason = t.rejectionReason || t.adminMessage || t.reason || '';
+                const reason = t.rejectionReason || t.adminMessage || '';
                 const isWithdrawal = t.type === 'withdrawal' || !!t.walletAddress;
                 const key = t.id || `tx-${index}`;
 
@@ -144,7 +148,6 @@ export default function DashboardPage() {
                         {t.createdAt || t.requestedAt ? new Date(t.createdAt || t.requestedAt!).toLocaleDateString() : '—'}
                       </p>
                     </div>
-
                     <div className="text-right sm:text-right">
                       <p className="font-semibold text-lg text-gray-900">${t.amount}</p>
                       <span className={`inline-block px-4 py-1 rounded-full text-xs font-medium mt-1 ${
