@@ -1,75 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { deposits, balances } from '@/db/schema';
+import { deposits, users, balances } from '@/db/schema';
 import { verifyToken, getAuthCookie } from '@/lib/auth';
 import { eq } from 'drizzle-orm';
-import { sendDepositPending } from '@/lib/email';
+import { sendDepositApproved } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
     const token = await getAuthCookie();
-    if (!token) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    }
+    if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
     const payload = verifyToken(token);
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-    const { amount, transactionHash, walletAddress } = await request.json();
-
-    if (!amount || parseFloat(amount) <= 0) {
-      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-    }
-
-    // Create deposit record
-    const [newDeposit] = await db.insert(deposits).values({
-      userId: payload.userId,
-      amount: amount.toString(),
-      transactionHash,
-      walletAddress,
-      status: 'pending',
-    }).returning();
-
-    // Update user balance - FIXED with null check
-    if (payload.userId) {
-      const balance = await db.query.balances.findFirst({
-        where: eq(balances.userId, payload.userId),
-      });
-
-      if (balance) {
-        const newBalance = parseFloat(balance.currentBalance) + parseFloat(amount);
-        const newTotalDeposited = parseFloat(balance.totalDeposited) + parseFloat(amount);
-
-        await db.update(balances)
-          .set({
-            currentBalance: newBalance.toString(),
-            totalDeposited: newTotalDeposited.toString(),
-          })
-          .where(eq(balances.userId, payload.userId));
-      }
-    }
-
-    // Send confirmation email
-    const user = await db.query.users.findFirst({
+    const admin = await db.query.users.findFirst({
       where: eq(users.id, payload.userId),
     });
 
-    if (user?.email) {
-      await sendDepositPending(user.email, amount.toString(), user.fullName);
+    if (!admin?.isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Deposit submitted successfully',
-      deposit: newDeposit
+    const { depositId } = await request.json();
+
+    const deposit = await db.query.deposits.findFirst({
+      where: eq(deposits.id, depositId),
     });
 
+    if (!deposit || !deposit.userId) {
+      return NextResponse.json({ error: 'Deposit not found' }, { status: 404 });
+    }
+
+    if (deposit.status !== 'pending') {
+      return NextResponse.json({ error: 'Deposit already processed' }, { status: 400 });
+    }
+
+    // Update deposit status
+    await db.update(deposits)
+      .set({ status: 'confirmed', confirmedAt: new Date() })
+      .where(eq(deposits.id, depositId));
+
+    // Update user balance - FIXED
+    const balance = await db.query.balances.findFirst({
+      where: eq(balances.userId, deposit.userId),
+    });
+
+    if (balance) {
+      const newBalance = parseFloat(balance.currentBalance) + parseFloat(deposit.amount);
+      const newTotalDeposited = parseFloat(balance.totalDeposited) + parseFloat(deposit.amount);
+
+      await db.update(balances)
+        .set({
+          currentBalance: newBalance.toString(),
+          totalDeposited: newTotalDeposited.toString(),
+        })
+        .where(eq(balances.userId, deposit.userId));
+    }
+
+    // Send email
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, deposit.userId),
+    });
+
+    if (user?.email) {
+      await sendDepositApproved(user.email, deposit.amount.toString(), user.fullName);
+    }
+
+    return NextResponse.json({ success: true, message: 'Deposit approved' });
+
   } catch (error) {
-    console.error('Deposit error:', error);
-    return NextResponse.json({ 
-      error: 'Something went wrong' 
-    }, { status: 500 });
+    console.error('Approve error:', error);
+    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
 }
