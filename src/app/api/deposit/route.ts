@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     const payload = verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
+    // Check if user is admin
     const admin = await db.query.users.findFirst({
       where: eq(users.id, payload.userId),
     });
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
       where: eq(deposits.id, depositId),
     });
 
-    // FIXED: Proper null check to prevent TypeScript error
+    // Critical fix: Check for null userId
     if (!deposit || !deposit.userId) {
       return NextResponse.json({ error: 'Deposit not found' }, { status: 404 });
     }
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
       .set({ status: 'confirmed', confirmedAt: new Date() })
       .where(eq(deposits.id, depositId));
 
-    // Update user balance - Now safe
+    // Update user balance
     const balance = await db.query.balances.findFirst({
       where: eq(balances.userId, deposit.userId),
     });
@@ -58,13 +59,13 @@ export async function POST(request: NextRequest) {
         .where(eq(balances.userId, deposit.userId));
     }
 
-    // Send success email
+    // Send approval email
     const user = await db.query.users.findFirst({
       where: eq(users.id, deposit.userId),
     });
 
     if (user?.email) {
-      await sendDepositApproved(user.email, deposit.amount.toString(), user.fullName);
+      await sendDepositApproved(user.email, deposit.amount.toString(), user.fullName || "User");
     }
 
     return NextResponse.json({ 
