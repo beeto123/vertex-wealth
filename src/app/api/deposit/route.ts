@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       where: eq(deposits.id, depositId),
     });
 
+    // Important null check to fix TypeScript error
     if (!deposit || !deposit.userId) {
       return NextResponse.json({ error: 'Deposit not found' }, { status: 404 });
     }
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
       .set({ status: 'confirmed', confirmedAt: new Date() })
       .where(eq(deposits.id, depositId));
 
-    // Update user balance - FIXED
+    // Update user balance
     const balance = await db.query.balances.findFirst({
       where: eq(balances.userId, deposit.userId),
     });
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
         .where(eq(balances.userId, deposit.userId));
     }
 
-    // Send email
+    // Send email notification
     const user = await db.query.users.findFirst({
       where: eq(users.id, deposit.userId),
     });
@@ -66,10 +67,13 @@ export async function POST(request: NextRequest) {
       await sendDepositApproved(user.email, deposit.amount.toString(), user.fullName);
     }
 
-    return NextResponse.json({ success: true, message: 'Deposit approved' });
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Deposit approved successfully' 
+    });
 
   } catch (error) {
-    console.error('Approve error:', error);
+    console.error('Approve deposit error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
 }
