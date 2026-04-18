@@ -18,7 +18,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    // Calculate balance from CONFIRMED deposits only
+    // Get ONLY confirmed deposits
     const confirmedDeposits = await db.select().from(deposits)
       .where(eq(deposits.userId, payload.userId))
       .where(eq(deposits.status, 'confirmed'));
