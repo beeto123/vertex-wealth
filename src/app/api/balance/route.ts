@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { balances, users } from '@/db/schema';
+import { balances, users, deposits } from '@/db/schema';
 import { verifyToken, getAuthCookie } from '@/lib/auth';
 import { eq } from 'drizzle-orm';
 
@@ -18,19 +18,34 @@ export async function GET() {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    const balance = await db.query.balances.findFirst({
+    // Calculate balance from CONFIRMED deposits only
+    const confirmedDeposits = await db.select().from(deposits)
+      .where(eq(deposits.userId, payload.userId))
+      .where(eq(deposits.status, 'confirmed'));
+
+    const totalConfirmed = confirmedDeposits.reduce((sum, d) => sum + parseFloat(d.amount), 0);
+
+    // Get existing balance record or create one
+    let balance = await db.query.balances.findFirst({
       where: eq(balances.userId, payload.userId),
     });
 
     if (!balance) {
       return NextResponse.json({
-        currentBalance: "0",
-        totalDeposited: "0",
-        totalProfit: "0"
+        currentBalance: totalConfirmed.toString(),
+        totalDeposited: totalConfirmed.toString(),
+        totalWithdrawn: "0",
+        totalInterestEarned: "0"
       });
     }
 
-    return NextResponse.json(balance);
+    // Return the calculated balance (not the stored one)
+    return NextResponse.json({
+      currentBalance: totalConfirmed.toString(),
+      totalDeposited: totalConfirmed.toString(),
+      totalWithdrawn: balance.totalWithdrawn || "0",
+      totalInterestEarned: balance.totalInterestEarned || "0"
+    });
 
   } catch (error) {
     console.error('Balance error:', error);
