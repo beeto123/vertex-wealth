@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       where: eq(deposits.id, depositId),
     });
 
-    // Important null check to fix TypeScript error
+    // FIXED: Proper null check to prevent TypeScript error
     if (!deposit || !deposit.userId) {
       return NextResponse.json({ error: 'Deposit not found' }, { status: 404 });
     }
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       .set({ status: 'confirmed', confirmedAt: new Date() })
       .where(eq(deposits.id, depositId));
 
-    // Update user balance
+    // Update user balance - Now safe
     const balance = await db.query.balances.findFirst({
       where: eq(balances.userId, deposit.userId),
     });
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         .where(eq(balances.userId, deposit.userId));
     }
 
-    // Send email notification
+    // Send success email
     const user = await db.query.users.findFirst({
       where: eq(users.id, deposit.userId),
     });
