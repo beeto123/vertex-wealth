@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { deposits, balances } from '@/db/schema';
+import { balances } from '@/db/schema';
 import { verifyToken, getAuthCookie } from '@/lib/auth';
 import { eq } from 'drizzle-orm';
 
-export async function POST(request: NextRequest) {
+export async function GET() {
   try {
     const token = await getAuthCookie();
     if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
@@ -12,41 +12,29 @@ export async function POST(request: NextRequest) {
     const payload = verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-    const { amount, transactionHash } = await request.json();
-
-    if (!amount || parseFloat(amount) <= 0) {
-      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-    }
-
-    if (!transactionHash) {
-      return NextResponse.json({ error: 'Transaction hash required' }, { status: 400 });
-    }
-
-    // Check for duplicate transaction hash
-    const existingDeposit = await db.query.deposits.findFirst({
-      where: eq(deposits.txHash, transactionHash),
+    // Single source of truth: Use balances table
+    const balanceRecord = await db.query.balances.findFirst({
+      where: eq(balances.userId, payload.userId),
     });
 
-    if (existingDeposit) {
-      return NextResponse.json({ error: 'Transaction hash already submitted' }, { status: 400 });
+    if (!balanceRecord) {
+      return NextResponse.json({
+        currentBalance: "0.00",
+        totalDeposited: "0.00",
+        totalWithdrawn: "0.00",
+        totalInterestEarned: "0.00"
+      });
     }
 
-    // Create deposit record with status 'pending' — NO balance update here!
-    const [newDeposit] = await db.insert(deposits).values({
-      userId: payload.userId,
-      amount: amount.toString(),
-      txHash: transactionHash,
-      status: 'pending',
-    }).returning();
-
     return NextResponse.json({
-      success: true,
-      message: 'Deposit submitted successfully. Awaiting admin approval.',
-      deposit: newDeposit
+      currentBalance: balanceRecord.currentBalance?.toString() || "0.00",
+      totalDeposited: balanceRecord.totalDeposited?.toString() || "0.00",
+      totalWithdrawn: balanceRecord.totalWithdrawn?.toString() || "0.00",
+      totalInterestEarned: balanceRecord.totalInterestEarned?.toString() || "0.00"
     });
 
   } catch (error) {
-    console.error('Deposit error:', error);
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
+    console.error('Balance error:', error);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
