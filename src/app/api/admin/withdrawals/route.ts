@@ -26,10 +26,11 @@ export async function GET() {
 
     const withdrawalsWithUsers = allWithdrawals.map(w => ({
       ...w,
-      user: userMap.get(w.userId) || null
+      user: w.userId ? (userMap.get(w.userId) ?? null) : null
     }));
 
     return NextResponse.json({ withdrawals: withdrawalsWithUsers });
+
   } catch (error) {
     console.error('Admin withdrawals error:', error);
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
