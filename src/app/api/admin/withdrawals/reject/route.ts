@@ -22,38 +22,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Reason is required' }, { status: 400 });
     }
 
-    // Get withdrawal before updating
     const withdrawal = await db.query.withdrawals.findFirst({
       where: eq(withdrawals.id, withdrawalId),
     });
 
-    if (!withdrawal) {
+    if (!withdrawal || !withdrawal.userId) {
       return NextResponse.json({ error: 'Withdrawal not found' }, { status: 404 });
     }
 
     await db.update(withdrawals)
-      .set({ 
-        status: 'rejected', 
-        adminMessage: reason, 
-        processedAt: new Date() 
-      })
+      .set({ status: 'rejected', adminMessage: reason, processedAt: new Date() })
       .where(eq(withdrawals.id, withdrawalId));
 
-    // === SEND REJECTION EMAIL ===
     const user = await db.query.users.findFirst({
       where: eq(users.id, withdrawal.userId),
     });
 
     if (user?.email) {
       await sendWithdrawalRejected(
-        user.email, 
-        withdrawal.amount.toString(), 
-        user.fullName, 
+        user.email,
+        withdrawal.amount.toString(),
+        user.fullName ?? '',
         reason
       );
     }
 
     return NextResponse.json({ success: true });
+
   } catch (error) {
     console.error('Reject withdrawal error:', error);
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
