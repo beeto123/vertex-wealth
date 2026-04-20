@@ -14,12 +14,11 @@ export async function POST(request: NextRequest) {
 
     const { amount, walletAddress } = await request.json();
 
-    // Check balance
     const balance = await db.query.balances.findFirst({
       where: eq(balances.userId, payload.userId),
     });
 
-    if (!balance || parseFloat(balance.currentBalance) < amount) {
+    if (!balance || parseFloat(balance.currentBalance ?? '0') < amount) {
       return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 });
     }
 
@@ -31,6 +30,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, message: 'Withdrawal requested' });
+
   } catch (error) {
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
