@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { deposits, users } from '@/db/schema';
 import { verifyToken, getAuthCookie } from '@/lib/auth';
 import { eq } from 'drizzle-orm';
-import { sendDepositApproved } from '@/lib/email'; // We'll create rejected version below
+import { sendDepositRejected } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,27 +26,24 @@ export async function POST(request: NextRequest) {
       where: eq(deposits.id, depositId),
     });
 
-    if (!deposit) {
+    if (!deposit || !deposit.userId) {
       return NextResponse.json({ error: 'Deposit not found' }, { status: 404 });
     }
 
     await db.update(deposits)
-      .set({ 
-        status: 'rejected', 
-        adminNote: reason 
-      })
+      .set({ status: 'rejected', adminNote: reason })
       .where(eq(deposits.id, depositId));
 
-    // === SEND REJECTION EMAIL ===
     const user = await db.query.users.findFirst({
       where: eq(users.id, deposit.userId),
     });
 
     if (user?.email) {
-      await sendDepositRejected(user.email, deposit.amount.toString(), user.fullName, reason);
+      await sendDepositRejected(user.email, deposit.amount.toString(), user.fullName ?? '', reason);
     }
 
     return NextResponse.json({ success: true, message: 'Deposit rejected' });
+
   } catch (error) {
     console.error('Reject deposit error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
