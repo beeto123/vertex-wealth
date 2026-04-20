@@ -24,7 +24,7 @@ export default function DepositPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: parseFloat(amount),
-          txHash,
+          transactionHash: txHash,
         }),
       });
 
@@ -78,7 +78,6 @@ export default function DepositPage() {
             </div>
           )}
 
-          {/* USDT Address Display */}
           <div className="bg-gray-100 p-3 sm:p-4 rounded-lg mb-4 sm:mb-6">
             <p className="text-xs sm:text-sm text-gray-600 mb-2">Send USDT (TRC-20) to:</p>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-2 sm:p-3 rounded border gap-2">
