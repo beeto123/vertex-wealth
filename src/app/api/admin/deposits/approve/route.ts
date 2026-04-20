@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Deposit already processed' }, { status: 400 });
     }
 
-    // Update deposit
+    // Update deposit status
     await db.update(deposits)
       .set({ status: 'confirmed', confirmedAt: new Date() })
       .where(eq(deposits.id, depositId));
@@ -46,8 +46,8 @@ export async function POST(request: NextRequest) {
     });
 
     if (balance) {
-      const newBalance = parseFloat(balance.currentBalance) + parseFloat(deposit.amount);
-      const newTotalDeposited = parseFloat(balance.totalDeposited) + parseFloat(deposit.amount);
+      const newBalance = parseFloat(balance.currentBalance ?? '0') + parseFloat(deposit.amount ?? '0');
+      const newTotalDeposited = parseFloat(balance.totalDeposited ?? '0') + parseFloat(deposit.amount ?? '0');
 
       await db.update(balances)
         .set({
@@ -63,10 +63,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (user?.email) {
-      await sendDepositApproved(user.email, deposit.amount.toString(), user.fullName);
+      await sendDepositApproved(user.email, deposit.amount.toString(), user.fullName ?? '');
     }
 
     return NextResponse.json({ success: true, message: 'Deposit approved' });
+
   } catch (error) {
     console.error('Approve error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
