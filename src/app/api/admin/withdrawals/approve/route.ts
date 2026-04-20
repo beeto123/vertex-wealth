@@ -30,14 +30,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid withdrawal' }, { status: 400 });
     }
 
-    // Update balance
     const balance = await db.query.balances.findFirst({
       where: eq(balances.userId, withdrawal.userId),
     });
 
     if (balance) {
-      const newBalance = parseFloat(balance.currentBalance) - parseFloat(withdrawal.amount);
-      const newTotalWithdrawn = parseFloat(balance.totalWithdrawn) + parseFloat(withdrawal.amount);
+      const newBalance = parseFloat(balance.currentBalance ?? '0') - parseFloat(withdrawal.amount ?? '0');
+      const newTotalWithdrawn = parseFloat(balance.totalWithdrawn ?? '0') + parseFloat(withdrawal.amount ?? '0');
 
       await db.update(balances)
         .set({
@@ -51,7 +50,6 @@ export async function POST(request: NextRequest) {
       .set({ status: 'approved', processedAt: new Date() })
       .where(eq(withdrawals.id, withdrawalId));
 
-    // Send email
     const user = await db.query.users.findFirst({
       where: eq(users.id, withdrawal.userId),
     });
@@ -60,12 +58,13 @@ export async function POST(request: NextRequest) {
       await sendWithdrawalApproved(
         user.email,
         withdrawal.amount.toString(),
-        user.fullName,
-        withdrawal.walletAddress || 'N/A'
+        user.fullName ?? '',
+        withdrawal.walletAddress ?? 'N/A'
       );
     }
 
     return NextResponse.json({ success: true });
+
   } catch (error) {
     console.error('Approve withdrawal error:', error);
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
