@@ -1,8 +1,3 @@
-// FORCE REDEPLOY v3.1 - Fixed pending deposit bug
-// FORCE REDEPLOY - v2.1
-import { NextResponse } from 'next/server';
-// ... rest of the code
-
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { balances } from '@/db/schema';
@@ -17,25 +12,15 @@ export async function GET() {
     const payload = verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-    // Get balance directly from balances table (single source of truth)
     const balance = await db.query.balances.findFirst({
       where: eq(balances.userId, payload.userId),
     });
 
-    if (!balance) {
-      return NextResponse.json({
-        currentBalance: "0.00",
-        totalDeposited: "0.00",
-        totalWithdrawn: "0.00",
-        totalInterestEarned: "0.00"
-      });
-    }
-
     return NextResponse.json({
-      currentBalance: balance.currentBalance?.toString() || "0.00",
-      totalDeposited: balance.totalDeposited?.toString() || "0.00",
-      totalWithdrawn: balance.totalWithdrawn?.toString() || "0.00",
-      totalInterestEarned: balance.totalInterestEarned?.toString() || "0.00"
+      currentBalance: balance?.currentBalance?.toString() || "0.00",
+      totalDeposited: balance?.totalDeposited?.toString() || "0.00",
+      totalWithdrawn: balance?.totalWithdrawn?.toString() || "0.00",
+      totalInterestEarned: balance?.totalInterestEarned?.toString() || "0.00"
     });
 
   } catch (error) {
