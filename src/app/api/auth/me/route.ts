@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { deposits } from '@/db/schema';
+import { users, balances } from '@/db/schema';
 import { verifyToken, getAuthCookie } from '@/lib/auth';
 import { eq } from 'drizzle-orm';
 
-export async function POST(request: NextRequest) {
+export async function GET() {
   try {
     const token = await getAuthCookie();
     if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
@@ -12,41 +12,37 @@ export async function POST(request: NextRequest) {
     const payload = verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-    const { amount, transactionHash } = await request.json();
-
-    if (!amount || parseFloat(amount) <= 0) {
-      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-    }
-
-    if (!transactionHash) {
-      return NextResponse.json({ error: 'Transaction hash required' }, { status: 400 });
-    }
-
-    // Check duplicate
-    const existing = await db.query.deposits.findFirst({
-      where: eq(deposits.txHash, transactionHash),
+    // Get user info
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, payload.userId),
     });
 
-    if (existing) {
-      return NextResponse.json({ error: 'Transaction hash already submitted' }, { status: 400 });
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // ONLY create pending deposit - NO balance update
-    const [newDeposit] = await db.insert(deposits).values({
-      userId: payload.userId,
-      amount: amount.toString(),
-      txHash: transactionHash,
-      status: 'pending',
-    }).returning();
+    // Get balance from balances table (single source of truth)
+    const balance = await db.query.balances.findFirst({
+      where: eq(balances.userId, payload.userId),
+    });
 
     return NextResponse.json({
-      success: true,
-      message: 'Deposit submitted successfully. Awaiting admin approval.',
-      deposit: newDeposit
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        isAdmin: user.isAdmin,
+      },
+      balance: balance || {
+        currentBalance: "0.00",
+        totalDeposited: "0.00",
+        totalWithdrawn: "0.00",
+        totalInterestEarned: "0.00"
+      }
     });
 
   } catch (error) {
-    console.error('Deposit error:', error);
+    console.error('Auth me error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
 }
