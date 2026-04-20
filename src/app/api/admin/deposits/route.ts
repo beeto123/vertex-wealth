@@ -20,20 +20,17 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 });
     }
 
-    // Get all deposits
     const allDeposits = await db.select().from(deposits).orderBy(desc(deposits.createdAt));
-
-    // Get all users and map them
     const allUsers = await db.select().from(users);
     const userMap = new Map(allUsers.map(u => [u.id, u]));
 
-    // Attach user data manually
     const depositsWithUsers = allDeposits.map(d => ({
       ...d,
-      user: userMap.get(d.userId) || null
+      user: d.userId ? (userMap.get(d.userId) ?? null) : null
     }));
 
     return NextResponse.json({ deposits: depositsWithUsers });
+
   } catch (error) {
     console.error('Admin deposits error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
