@@ -12,16 +12,12 @@ export async function GET() {
     const payload = verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-    // Get user info
     const user = await db.query.users.findFirst({
       where: eq(users.id, payload.userId),
     });
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-    // Get balance from balances table (single source of truth)
     const balance = await db.query.balances.findFirst({
       where: eq(balances.userId, payload.userId),
     });
@@ -42,7 +38,7 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error('Auth me error:', error);
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
+    console.error('me error:', error);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
